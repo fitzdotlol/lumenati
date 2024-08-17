@@ -32,7 +32,8 @@ int main(int argc, char **argv)
 
     int selectedShapeId = -1;
     int selectedSpriteId = -1;
-    selectedShapeId = 0;
+    selectedSpriteId = 0;
+    int currentFrameId = 0;
 
     // TODO: load from file
     int renderWidth = 1920;
@@ -105,36 +106,41 @@ int main(int argc, char **argv)
 
         bool drawUI = true;
         if (drawUI) {
-            int x = 230;
-            int y = 10;
-            size_t numShapes = stbds_arrlenu(doc->shapes);
-            Rectangle view;
-            GuiScrollPanel(
-                (Rectangle) { x, y, 200, 300},
-                "Shapes",
-                (Rectangle) { x+8, y+8, 200-16, numShapes * 18 + 16},
-                &ui_shapesPanelScroll,
-                &view
-            );
-            BeginScissorMode(x, y + 24 + 8, 200, 300 - (24 + 8*2));
+            int x;
+            int y;
 
-            x += 8;
-            y += 24 + 8 + ui_shapesPanelScroll.y;
-            for (int i = 0; i < numShapes; ++i) {
-                shape_t *shape = &doc->shapes[i];
+            // //// SHAPES PANEL
+            // x = 230;
+            // y = 10;
+            // size_t numShapes = stbds_arrlenu(doc->shapes);
+            // Rectangle view;
+            // GuiScrollPanel(
+            //     (Rectangle) { x, y, 200, 300},
+            //     "Shapes",
+            //     (Rectangle) { x+8, y+8, 200-16, numShapes * 18 + 16},
+            //     &ui_shapesPanelScroll,
+            //     &view
+            // );
+            // BeginScissorMode(x, y + 24 + 8, 200, 300 - (24 + 8*2));
 
-                if (i == selectedShapeId) {
-                    GuiSetState(STATE_FOCUSED);
-                }
-                const char *s = TextFormat("shape 0x%04X", i);
-                if (GuiLabelButton((Rectangle) { x, y, 184, 16 }, s)) {
-                    selectedShapeId = i;
-                    selectedSpriteId = -1;
-                }
-                GuiSetState(STATE_NORMAL);
-                y += 18;
-            }
-            EndScissorMode();
+            // x += 8;
+            // y += 24 + 8 + ui_shapesPanelScroll.y;
+            // for (int i = 0; i < numShapes; ++i) {
+            //     shape_t *shape = &doc->shapes[i];
+
+            //     if (i == selectedShapeId) {
+            //         GuiSetState(STATE_FOCUSED);
+            //     }
+            //     const char *s = TextFormat("shape 0x%04X", i);
+            //     if (GuiLabelButton((Rectangle) { x, y, 184, 16 }, s)) {
+            //         selectedShapeId = i;
+            //         selectedSpriteId = -1;
+            //         currentFrameId = 0;
+            //     }
+            //     GuiSetState(STATE_NORMAL);
+            //     y += 18;
+            // }
+            // EndScissorMode();
 
             ////// SPRITES PANEL
             x = 10;
@@ -161,6 +167,7 @@ int main(int argc, char **argv)
                 const char *s = TextFormat("sprite 0x%04X", i);
                 if (GuiLabelButton((Rectangle) { x, y, 184, 16 }, s)) {
                     selectedSpriteId = i;
+                    currentFrameId = 0;
                     selectedShapeId = -1;
                 }
                 GuiSetState(STATE_NORMAL);
@@ -168,41 +175,69 @@ int main(int argc, char **argv)
             }
             EndScissorMode();
 
-            ////// SPRITE PROPERTIES PANEL
+            #define PANEL_PADDING (8)
+            #define HEADER_HEIGHT (24)
+            #define MAX(a,b) (((a)>(b))?(a):(b))
+
+            ////// TIMELINE PANEL
             if (selectedSpriteId != -1) {
-                x = 10;
-                y = 320;
                 sprite_t *sprite = &doc->sprites[selectedSpriteId];
                 size_t numFrames = stbds_arrlenu(sprite->frames);
+                const char *s = TextFormat("%d", numFrames);
+                Vector2 textSize = MeasureTextEx(GuiGetFont(), s, (float)GuiGetStyle(DEFAULT, TEXT_SIZE), (float)GuiGetStyle(DEFAULT, TEXT_SPACING));
+                int minSize = textSize.x+4;
+
+                int w = g_screenWidth;
+                int h = 200;
+                x = 0;
+                y = g_screenHeight - h;
+                int contentWidth = numFrames * minSize + (PANEL_PADDING*2);
+                int contentHeight = h - (24 + PANEL_PADDING*2);
 
                 Rectangle spritePropertiesPanelView;
 
                 GuiScrollPanel(
-                    (Rectangle) { x, y, 200, 300},
-                    TextFormat("Sprite 0x%04X", selectedSpriteId),
-                    (Rectangle) { x+8, y+8, 200-16, numFrames * 18 + 16},
+                    (Rectangle) { x, y, w, h},
+                    TextFormat("Timeline - Sprite 0x%04X", selectedSpriteId),
+                    (Rectangle) { x+PANEL_PADDING, y+PANEL_PADDING, contentWidth, contentHeight },
                     &ui_spritePropertiesPanelScroll,
                     &spritePropertiesPanelView
                 );
-                BeginScissorMode(x, y + 24 + 8, 200, 300 - (24 + 8*2));
 
-                x += 8 + ui_spritePropertiesPanelScroll.x;
-                y += 24 + 8 + ui_spritePropertiesPanelScroll.y;
+                BeginScissorMode(x, y + HEADER_HEIGHT + PANEL_PADDING, w, contentHeight);
+
+                x += PANEL_PADDING + ui_spritePropertiesPanelScroll.x;
+                y += HEADER_HEIGHT + PANEL_PADDING + ui_spritePropertiesPanelScroll.y;
+
                 for (int frameIdx = 0; frameIdx < numFrames; ++frameIdx) {
                     frame_t *frame = &sprite->frames[frameIdx];
                     const char *s;
                     
+                    int size = minSize;
+
                     if (frame->label) {
                         const char *labelStr = doc->strings[frame->label->nameId];
-                        s = TextFormat("frame 0x%04X (\"%s\")", frameIdx, labelStr);
-                    } else {
-                        s = TextFormat("frame 0x%04X", frameIdx);
+                        Vector2 textSize = MeasureTextEx(GuiGetFont(), labelStr, (float)GuiGetStyle(DEFAULT, TEXT_SIZE), (float)GuiGetStyle(DEFAULT, TEXT_SPACING));
+                        GuiLabel((Rectangle) { x, y, textSize.x + 4, 16 }, labelStr);
+                        size = MAX(size, textSize.x+4);
                     }
 
-                    if (GuiLabelButton((Rectangle) { x, y, 184, 16 }, s)) {
+                    // if ((frameIdx+1) % 20 == 0 || frameIdx == 0) {
+                    //     s = TextFormat("%d", frameIdx+1);
+                    //     GuiButton((Rectangle) { x, y, 18, 16 }, s);
+                    // }
+
+                    s = TextFormat("%d", frameIdx+1);
+
+                    if (GuiButton((Rectangle) { x, y + 18, size, 16 }, s)) {
+                        currentFrameId = frameIdx;
                     }
 
-                    y += 18;
+                    if (frameIdx == currentFrameId) {
+                        GuiLabel((Rectangle) { x + size/4.f, y + 36, size, 16 }, "#121#");
+                    }
+
+                    x += size + 2;
                 }
                 EndScissorMode();
             }
