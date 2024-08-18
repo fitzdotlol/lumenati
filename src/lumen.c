@@ -183,15 +183,21 @@ lumen_document_t* lumen_document_load(const char *filename)
                 };
 
                 atlas.texture = loadLmTexture(i);
+                atlas.mat = LoadMaterialDefault();
+                atlas.mat.maps[MATERIAL_MAP_DIFFUSE].texture = atlas.texture;
 
                 stbds_arrput(doc->atlases, atlas);
             }
         } else if (tagType == CHUNK_TAG_SHAPE) {
-            shape_t shape = { 0 };
-            shape.id = file_readInt32(&file);
-            shape.unk1 = file_readInt32(&file);
-            shape.boundsId = file_readInt32(&file);
-            shape.unk2 = file_readInt32(&file);
+            shape_t *shape = MemAlloc(sizeof(*shape));
+            shape->character = (character_t) {
+                .id = file_readInt32(&file),
+                .type = CHARACTER_TYPE_SHAPE,
+            };
+
+            shape->unk1 = file_readInt32(&file);
+            shape->boundsId = file_readInt32(&file);
+            shape->unk2 = file_readInt32(&file);
 
             int numGraphics = file_readInt32(&file);
 
@@ -228,25 +234,30 @@ lumen_document_t* lumen_document_load(const char *filename)
 
                 graphic.mesh = GenMeshGraphic(&graphic);
 
-                stbds_arrput(shape.graphics, graphic);
+                stbds_arrput(shape->graphics, graphic);
             }
 
             stbds_arrput(doc->shapes, shape);
+            doc->characters[shape->character.id] = (character_t*)shape;
+
         } else if (tagType == CHUNK_TAG_GRAPHIC) {
             fprintf(stderr, "ORPHANED OBJECT CHUNK @ 0x%08lX\n", tagOffset);
             assert(false);
         } else if (tagType == CHUNK_TAG_DEFINE_SPRITE) {
-            sprite_t sprite = { 0 };
+            sprite_t *sprite = MemAlloc(sizeof(*sprite));
 
-            sprite.id = file_readInt32(&file);
-            sprite.unk1 = file_readInt32(&file);
-            sprite.unk2 = file_readInt32(&file);
+            sprite->character = (character_t) {
+                .id = file_readInt32(&file),
+                .type = CHARACTER_TYPE_SPRITE,
+            };
+            sprite->unk1 = file_readInt32(&file);
+            sprite->unk2 = file_readInt32(&file);
 
             int numLabels = file_readInt32(&file);
             int numFrames = file_readInt32(&file);
             int numKeyframes = file_readInt32(&file);
 
-            sprite.unk3 = file_readInt32(&file);
+            sprite->unk3 = file_readInt32(&file);
 
             for (int i = 0; i < numLabels; i++)
             {
@@ -257,7 +268,7 @@ lumen_document_t* lumen_document_load(const char *filename)
                     .unk1 = file_readInt32(&file),
                 };
 
-                stbds_arrput(sprite.labels, label);
+                stbds_arrput(sprite->labels, label);
             }
 
             int totalFrames = numFrames + numKeyframes;
@@ -320,6 +331,10 @@ lumen_document_t* lumen_document_load(const char *filename)
                             assert(false);
                         }
 
+                        // int maxDepth = doc->properties.maxDepth;
+                        // stbds_arrsetlen(placement.displayList, maxDepth);
+                        // memset(placement.displayList, 0, maxDepth * sizeof(placement.displayList[0]));
+
                         stbds_arrput(frame.placements, placement);
                     } else {
                         fprintf(stderr, "frame has unexpected child type 0x%04X\n", childType);
@@ -328,17 +343,40 @@ lumen_document_t* lumen_document_load(const char *filename)
                 }
 
                 if (frameType == CHUNK_TAG_KEYFRAME)
-                    stbds_arrput(sprite.keyframes, frame);
+                    stbds_arrput(sprite->keyframes, frame);
                 else
-                    stbds_arrput(sprite.frames, frame);
+                    stbds_arrput(sprite->frames, frame);
             }
 
             for (int i = 0; i < numLabels; ++i) {
-                label_t *label = &sprite.labels[i];
-                sprite.frames[label->startFrame].label = label;
+                label_t *label = &sprite->labels[i];
+                sprite->frames[label->startFrame].label = label;
             }
 
+            // int maxDepth = doc->properties.maxDepth;
+            // stbds_arrsetlen(sprite->displayList, maxDepth);
+            // memset(sprite->displayList, 0, maxDepth * sizeof(sprite->displayList[0]));
+
             stbds_arrput(doc->sprites, sprite);
+            doc->characters[sprite->character.id] = (character_t*)sprite;
+            // stbds_arrput(doc->characters, (character_t*)sprite);
+        } else if (tagType == CHUNK_TAG_PROPERTIES) {
+            doc->properties.unk0 = file_readInt32(&file);
+            doc->properties.unk1 = file_readInt32(&file);
+            doc->properties.unk2 = file_readInt32(&file);
+            doc->properties.maxCharacterId = file_readInt32(&file);
+            doc->properties.unk4 = file_readInt32(&file);
+            doc->properties.maxCharacterId2 = file_readInt32(&file);
+            doc->properties.maxDepth = file_readInt16(&file);
+            doc->properties.unk7 = file_readInt16(&file);
+            doc->properties.framerate = file_readFloat(&file);
+            doc->properties.width = file_readFloat(&file);
+            doc->properties.height = file_readFloat(&file);
+            doc->properties.unk8 = file_readInt32(&file);
+            doc->properties.unk9 = file_readInt32(&file);
+
+            stbds_arrsetlen(doc->characters, doc->properties.maxCharacterId);
+            memset(doc->characters, 0, doc->properties.maxCharacterId * sizeof(doc->characters[0]));
         } else if (tagType == CHUNK_TAG_END) {
             done = true;
         } else {

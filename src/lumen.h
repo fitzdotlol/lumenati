@@ -130,6 +130,7 @@ typedef struct {
     float width;
     float height;
 
+    Material mat;
     Texture texture;
 } atlas_t;
 
@@ -143,8 +144,18 @@ typedef struct {
     Mesh mesh;
 } graphic_t;
 
+typedef enum {
+    CHARACTER_TYPE_SHAPE,
+    CHARACTER_TYPE_SPRITE,
+} character_type_t;
+
 typedef struct {
     int32_t id;
+    character_type_t type;
+} character_t;
+
+typedef struct {
+    character_t character;
     int32_t unk1;
     int32_t boundsId;
     int32_t unk2;
@@ -177,13 +188,14 @@ typedef struct {
     float data[20];
 } color_matrix_t;
 
-typedef struct {
+typedef struct placement_t {
     int32_t characterId;
     int32_t placementId;
     int32_t unk1;
     int32_t nameId;
     int16_t flags;
     int16_t blendMode;
+
     int16_t depth;
     int16_t unk4;
     int16_t unk5;
@@ -214,7 +226,7 @@ typedef struct {
 } frame_t;
 
 typedef struct {
-    int32_t id;
+    character_t character;
     int32_t unk1;
     int32_t unk2;
     int32_t unk3;
@@ -226,16 +238,32 @@ typedef struct {
 } sprite_t;
 
 typedef struct {
+    sprite_t *sprite;
+    int currentFrame;
+    placement_t **displayList;
+} sprite_instance_t;
+
+typedef struct {
     header_t header;
+    properties_t properties;
+
     char **strings;
     color_t *colors;
     Matrix *transforms;
     Vector2 *positions;
     bounds_t *bounds;
     atlas_t *atlases;
-    shape_t *shapes;
-    sprite_t *sprites;
+    shape_t **shapes;
+    sprite_t **sprites;
+
+    //
+    character_t **characters;
 } lumen_document_t;
+
+typedef struct {
+    int16_t key;
+    placement_t value;
+} placement_kv_t;
 
 lumen_document_t* lumen_document_load(const char *filename);
 
