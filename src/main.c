@@ -21,6 +21,49 @@ Vector2 ui_shapesPanelScroll;
 Vector2 ui_spritesPanelScroll;
 Vector2 ui_spritePropertiesPanelScroll;
 Vector2 ui_displayListPanelScroll;
+bool ui_drawTexlistPanel = true;
+Vector2 ui_texlistPanelScroll;
+
+void drawTexlistPanel(texlist_t *texlist)
+{
+    if (!ui_drawTexlistPanel)
+        return;
+
+    int x = 500;
+    int y = 10;
+    size_t numTextures = stbds_arrlenu(texlist->textures);
+    Rectangle view;
+    GuiScrollPanel(
+        (Rectangle) { x, y, 200, 300},
+        "Texlist",
+        (Rectangle) { x+8, y+8, 200-16, numTextures * 18 + 16},
+        &ui_texlistPanelScroll,
+        &view
+    );
+
+    // close button
+    if (GuiButton(
+        (Rectangle) { x + 200 - 20, y + 4, 16, 16 },
+        "X"
+    )) {
+        ui_drawTexlistPanel = false;
+        return;
+    }
+
+    BeginScissorMode(x, y + 24 + 8, 200, 300 - (24 + 8*2));
+
+    x += 8 + ui_texlistPanelScroll.x;
+    y += 24 + 8 + ui_texlistPanelScroll.y;
+    for (int i = 0; i < numTextures; ++i) {
+        texlist_entry_t *texlistEntry = &texlist->textures[i];
+
+        const char *s = TextFormat("%d: %s", i, texlistEntry->name);
+        GuiLabel((Rectangle) { x, y, 184, 16 }, s);
+
+        y += 18;
+    }
+    EndScissorMode();
+}
 
 void processKeyframe(lumen_document_t *doc, sprite_instance_t *inst, int keyframeIdx)
 {
@@ -293,6 +336,8 @@ int main(int argc, char **argv)
                 y += 18;
             }
             EndScissorMode();
+
+            drawTexlistPanel(texlist);
 
             // //// SHAPES PANEL
             // x = 230;
