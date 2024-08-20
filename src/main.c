@@ -12,6 +12,7 @@
 
 #include "lumen.h"
 #include "nut.h"
+#include "texlist.h"
 
 int g_screenWidth = 1280;
 int g_screenHeight = 720;
@@ -130,6 +131,7 @@ int main(int argc, char **argv)
     GuiLoadStyleCyber();
 
     lumen_document_t *doc = lumen_document_load("data/chara/chara.lm");
+    texlist_t *texlist = texlist_load("data/chara/texlist.lst");
 
     int selectedShapeId = -1;
     int currentFrameId = 0;
