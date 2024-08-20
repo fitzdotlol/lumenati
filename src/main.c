@@ -129,7 +129,7 @@ int main(int argc, char **argv)
     SetTargetFPS(60);
     GuiLoadStyleCyber();
 
-    lumen_document_t *doc = lumen_document_load("/home/fitz/s4data/ui/lumen/chara/chara.lm");
+    lumen_document_t *doc = lumen_document_load("data/chara/chara.lm");
 
     int selectedShapeId = -1;
     int currentFrameId = 0;

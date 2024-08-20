@@ -7,7 +7,7 @@
 
 Texture loadLmTexture(int idx)
 {
-    const char *filename = TextFormat("/home/fitz/s4data/ui/lumen/chara/img-%05d.nut", idx);
+    const char *filename = TextFormat("data/chara/img-%05d.nut", idx);
 
     if (FileExists(filename)) {
         Texture tex = LoadNUTTexture(filename);
