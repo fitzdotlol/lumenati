@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <raylib.h>
 
 #include "nut.h"
 #include "gtx.h"
@@ -20,9 +21,11 @@ PixelFormat getPixelFormatFromNutFormat(int typet)
             // utype = PixelFormat.Bgra;
             return PIXELFORMAT_UNCOMPRESSED_R8G8B8A8;
         case 21:
-            return PIXELFORMAT_COMPRESSED_RED_RGTC1_EXT;
+            return PIXELFORMAT_COMPRESSED_DXT1_RGBA;
+            // return PIXELFORMAT_COMPRESSED_RED_RGTC1_EXT;
         case 22:
-            return PIXELFORMAT_COMPRESSED_RED_GREEN_RGTC2_EXT;
+            return PIXELFORMAT_COMPRESSED_DXT5_RGBA;
+            // return PIXELFORMAT_COMPRESSED_RED_GREEN_RGTC2_EXT;
     }
 
     return 0;

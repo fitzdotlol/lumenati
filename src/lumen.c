@@ -350,6 +350,7 @@ lumen_document_t* lumen_document_load(const char *filename)
 
             for (int i = 0; i < numLabels; ++i) {
                 label_t *label = &sprite->labels[i];
+                label->id = i;
                 sprite->frames[label->startFrame].label = label;
             }
 

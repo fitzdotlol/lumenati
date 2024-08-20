@@ -147,6 +147,10 @@ typedef struct {
 typedef enum {
     CHARACTER_TYPE_SHAPE,
     CHARACTER_TYPE_SPRITE,
+
+    // NOTE: this probably isn't necessary,
+    // but will assist in debugging for the moment.
+    CHARACTER_TYPE_SPRITE_INSTANCE,
 } character_type_t;
 
 typedef struct {
@@ -167,6 +171,8 @@ typedef struct {
     int32_t nameId;
     int32_t startFrame;
     int32_t unk1;
+
+    int32_t id;
 } label_t;
 
 typedef struct {
@@ -188,7 +194,7 @@ typedef struct {
     float data[20];
 } color_matrix_t;
 
-typedef struct placement_t {
+typedef struct {
     int32_t characterId;
     int32_t placementId;
     int32_t unk1;
@@ -212,6 +218,28 @@ typedef struct placement_t {
     color_matrix_t colorMatrix;
     unk_f014_t unkF014;
 } placement_t;
+
+typedef struct {
+    character_t *character;
+
+    int32_t placementId;
+    int32_t unk1;
+    int32_t nameId;
+    int16_t flags;
+    int16_t blendMode;
+
+    int16_t depth;
+    int16_t unk4;
+    int16_t unk5;
+    int16_t unk6;
+    int16_t positionFlags;
+    int16_t positionId;
+    int32_t colorMultId;
+    int32_t colorAddId;
+    
+    color_matrix_t *colorMatrix;
+    unk_f014_t *unkF014;
+} displaylist_entry_t;
 
 typedef struct {
     int32_t id;
@@ -238,9 +266,11 @@ typedef struct {
 } sprite_t;
 
 typedef struct {
+    character_t character;
+
     sprite_t *sprite;
     int currentFrame;
-    placement_t **displayList;
+    displaylist_entry_t *displayList;
 } sprite_instance_t;
 
 typedef struct {
