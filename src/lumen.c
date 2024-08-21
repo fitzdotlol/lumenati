@@ -183,10 +183,10 @@ lumen_document_t* lumen_document_load(const char *filename)
 
             for (int i = 0; i < numAtlases; ++i) {
                 atlas_t atlas = {
-                    file_readInt32(&file),
-                    file_readInt32(&file),
-                    file_readFloat(&file),
-                    file_readFloat(&file)
+                    .id = file_readInt32(&file),
+                    .nameId = file_readInt32(&file),
+                    .width = file_readFloat(&file),
+                    .height = file_readFloat(&file)
                 };
 
                 atlas.texture = loadLmTexture(i);
@@ -194,6 +194,18 @@ lumen_document_t* lumen_document_load(const char *filename)
                 atlas.mat.maps[MATERIAL_MAP_DIFFUSE].texture = atlas.texture;
 
                 stbds_arrput(doc->atlases, atlas);
+            }
+        } else if (tagType == CHUNK_TAG_SOUNDS) {
+            int32_t numSounds = file_readInt32(&file);
+            printf("    %d sounds\n", numSounds);
+
+            for (int i = 0; i < numSounds; ++i) {
+                sound_t sound = {
+                    .id = file_readInt32(&file),
+                    .nameId = file_readInt32(&file),
+                };
+
+                stbds_arrput(doc->sounds, sound);
             }
         } else if (tagType == CHUNK_TAG_SHAPE) {
             shape_t *shape = MemAlloc(sizeof(*shape));
@@ -246,7 +258,34 @@ lumen_document_t* lumen_document_load(const char *filename)
 
             stbds_arrput(doc->shapes, shape);
             doc->characters[shape->character.id] = (character_t*)shape;
+        } else if (tagType == CHUNK_TAG_DYNAMIC_TEXT) {
+            dynamic_text_t *text = (dynamic_text_t*)MemAlloc(sizeof(*text));
 
+            text->character = (character_t) {
+                .id = file_readInt32(&file),
+                .type = CHARACTER_TYPE_DYNAMIC_TEXT,
+            };
+
+            text->fontId = file_readInt32(&file);
+            text->placeholderTextId = file_readInt32(&file);
+            text->classNameId = file_readInt32(&file);
+            text->colorId = file_readInt32(&file);
+            text->boundsId = file_readInt32(&file);
+            text->varNameId = file_readInt32(&file);
+            text->unk5 = file_readInt32(&file);
+
+            text->alignment = (text_align_t)file_readInt16(&file);
+            text->maxLength = file_readInt16(&file);
+            text->unk7 = file_readInt32(&file);
+            text->unk8 = file_readInt32(&file);
+            text->fontSize = file_readFloat(&file);
+            text->marginLeft = file_readFloat(&file);
+            text->marginRight = file_readFloat(&file);
+            text->indent = file_readFloat(&file);
+            text->leading = file_readFloat(&file);
+
+            stbds_arrput(doc->dynamicTexts, text);
+            doc->characters[text->character.id] = (character_t*)text;
         } else if (tagType == CHUNK_TAG_GRAPHIC) {
             fprintf(stderr, "ORPHANED OBJECT CHUNK @ 0x%08lX\n", tagOffset);
             assert(false);
@@ -264,7 +303,8 @@ lumen_document_t* lumen_document_load(const char *filename)
             int numFrames = file_readInt32(&file);
             int numKeyframes = file_readInt32(&file);
 
-            sprite->unk3 = file_readInt32(&file);
+            sprite->maxDepth = file_readInt16(&file);
+            sprite->unk3 = file_readInt16(&file);
 
             for (int i = 0; i < numLabels; i++)
             {
@@ -295,7 +335,7 @@ lumen_document_t* lumen_document_load(const char *filename)
                     if (childType == CHUNK_TAG_REMOVE_OBJECT) {
                         deletion_t deletion = {
                             .unk1 = file_readInt32(&file),
-                            .spriteObjectId = file_readInt16(&file),
+                            .depth = file_readInt16(&file),
                             .unk2 = file_readInt16(&file),
                         };
 
@@ -315,8 +355,8 @@ lumen_document_t* lumen_document_load(const char *filename)
                             .flags = file_readInt16(&file),
                             .blendMode = file_readInt16(&file),
                             .depth = file_readInt16(&file),
-                            .unk4 = file_readInt16(&file),
-                            .unk5 = file_readInt16(&file),
+                            .clipDepth = file_readInt16(&file),
+                            .ratio = file_readInt16(&file),
                             .unk6 = file_readInt16(&file),
                             .positionFlags = file_readInt16(&file),
                             .positionId = file_readInt16(&file),
@@ -338,10 +378,6 @@ lumen_document_t* lumen_document_load(const char *filename)
                             assert(false);
                         }
 
-                        // int maxDepth = doc->properties.maxDepth;
-                        // stbds_arrsetlen(placement.displayList, maxDepth);
-                        // memset(placement.displayList, 0, maxDepth * sizeof(placement.displayList[0]));
-
                         stbds_arrput(frame.placements, placement);
                     } else {
                         fprintf(stderr, "frame has unexpected child type 0x%04X\n", childType);
@@ -361,10 +397,6 @@ lumen_document_t* lumen_document_load(const char *filename)
                 sprite->frames[label->startFrame].label = label;
             }
 
-            // int maxDepth = doc->properties.maxDepth;
-            // stbds_arrsetlen(sprite->displayList, maxDepth);
-            // memset(sprite->displayList, 0, maxDepth * sizeof(sprite->displayList[0]));
-
             stbds_arrput(doc->sprites, sprite);
             doc->characters[sprite->character.id] = (character_t*)sprite;
             // stbds_arrput(doc->characters, (character_t*)sprite);
@@ -374,7 +406,7 @@ lumen_document_t* lumen_document_load(const char *filename)
             doc->properties.unk2 = file_readInt32(&file);
             doc->properties.maxCharacterId = file_readInt32(&file);
             doc->properties.unk4 = file_readInt32(&file);
-            doc->properties.maxCharacterId2 = file_readInt32(&file);
+            doc->properties.rootCharacterId = file_readInt32(&file);
             doc->properties.maxDepth = file_readInt16(&file);
             doc->properties.unk7 = file_readInt16(&file);
             doc->properties.framerate = file_readFloat(&file);
@@ -385,6 +417,15 @@ lumen_document_t* lumen_document_load(const char *filename)
 
             stbds_arrsetlen(doc->characters, doc->properties.maxCharacterId);
             memset(doc->characters, 0, doc->properties.maxCharacterId * sizeof(doc->characters[0]));
+        } else if (tagType == CHUNK_TAG_DEFINES) {
+            doc->defines.numShapes = file_readInt32(&file);
+            doc->defines.unk1 = file_readInt32(&file);
+            doc->defines.numSprites = file_readInt32(&file);
+            doc->defines.unk3 = file_readInt32(&file);
+            doc->defines.numTexts = file_readInt32(&file);
+            doc->defines.unk5 = file_readInt32(&file);
+            doc->defines.unk6 = file_readInt32(&file);
+            doc->defines.unk7 = file_readInt32(&file);
         } else if (tagType == CHUNK_TAG_END) {
             done = true;
         } else {

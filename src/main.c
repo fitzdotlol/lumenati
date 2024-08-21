@@ -17,15 +17,20 @@
 int g_screenWidth = 1280;
 int g_screenHeight = 720;
 
-Vector2 ui_spritesPanelScroll;
+int ui_selectedCharacterId;
+bool ui_drawCharsPanel = true;
+Vector2 ui_charsPanelScroll;
+
+bool ui_charsPanelShowShape = true;
+bool ui_charsPanelShowSprite = true;
+bool ui_charsPanelShowDynText = true;
+bool ui_charsPanelShowNull = false;
+bool ui_charsPanelShowUnk = true;
+
 Vector2 ui_spritePropertiesPanelScroll;
 Vector2 ui_displayListPanelScroll;
-bool ui_drawTexlistPanel = true;
+bool ui_drawTexlistPanel = false;
 Vector2 ui_texlistPanelScroll;
-
-int ui_selectedShapeId = -1;
-bool ui_drawShapesPanel = true;
-Vector2 ui_shapesPanelScroll;
 
 void drawTexlistPanel(texlist_t *texlist)
 {
@@ -68,21 +73,50 @@ void drawTexlistPanel(texlist_t *texlist)
     EndScissorMode();
 }
 
-void drawShapesPanel(lumen_document_t *doc)
+void drawCharactersPanel(lumen_document_t *doc)
 {
-    if (!ui_drawShapesPanel)
+    if (!ui_drawCharsPanel)
         return;
 
-    int x = 230;
+    int x = 10;
     int y = 10;
-    size_t numShapes = stbds_arrlenu(doc->shapes);
-    Rectangle view;
+    // FIXME: should just be visible (i.e., not filtered) characters.
+    size_t numChars = stbds_arrlenu(doc->characters);
+
+    size_t numVisibleChars = 0;
+    for (int i = 0; i < numChars; ++i) {
+        character_t *ch = doc->characters[i];
+        if (!ch) {
+            if (ui_charsPanelShowNull) {
+                numVisibleChars++;
+            }
+            continue;
+        }
+
+        if (ch->type == CHARACTER_TYPE_SHAPE) {
+            if (!ui_charsPanelShowShape)
+                continue;
+        } else if (ch->type == CHARACTER_TYPE_SPRITE) {
+            if (!ui_charsPanelShowSprite)
+                continue;
+        } else if (ch->type == CHARACTER_TYPE_DYNAMIC_TEXT) {
+            if (!ui_charsPanelShowDynText)
+                continue;
+        } else {
+            if (!ui_charsPanelShowUnk)
+                continue;
+        }
+
+        numVisibleChars++;
+    }
+
+    Rectangle charsPanelView;
     GuiScrollPanel(
         (Rectangle) { x, y, 200, 300},
-        "Shapes",
-        (Rectangle) { x+8, y+8, 200-16, numShapes * 18 + 16},
-        &ui_shapesPanelScroll,
-        &view
+        "Characters",
+        (Rectangle) { x+8, y+8, 200-16, numVisibleChars * 18 + 16},
+        &ui_charsPanelScroll,
+        &charsPanelView
     );
 
     // close button
@@ -90,23 +124,63 @@ void drawShapesPanel(lumen_document_t *doc)
         (Rectangle) { x + 200 - 20, y + 4, 16, 16 },
         "X"
     )) {
-        ui_drawShapesPanel = false;
+        ui_drawCharsPanel = false;
         return;
     }
 
-    BeginScissorMode(x, y + 24 + 8, 200, 300 - (24 + 8*2));
+    y += 18;
 
-    x += 8;
-    y += 24 + 8 + ui_shapesPanelScroll.y;
-    for (int i = 0; i < numShapes; ++i) {
-        shape_t *shape = doc->shapes[i];
+    GuiLabel((Rectangle) { x + 8, y + 12, 50, 16}, "Filters:");
+    GuiToggle((Rectangle) { x + 54, y + 12, 16, 16}, "#12#", &ui_charsPanelShowShape);
+    GuiToggle((Rectangle) { x + 72, y + 12, 16, 16}, "#13#", &ui_charsPanelShowSprite);
+    GuiToggle((Rectangle) { x + 90, y + 12, 16, 16}, "#10#", &ui_charsPanelShowDynText);
+    GuiToggle((Rectangle) { x + 108, y + 12, 16, 16}, "#193#", &ui_charsPanelShowUnk);
+    GuiToggle((Rectangle) { x + 126, y + 12, 16, 16}, "#9#", &ui_charsPanelShowNull);
 
-        if (i == ui_selectedShapeId) {
+
+    BeginScissorMode(x, y + 24 + 8, 200, 300 - (24 + 8*2 + 18));
+
+    x += 8 + ui_charsPanelScroll.x;
+    y += 24 + 8 + ui_charsPanelScroll.y;
+    for (int i = 0; i < numChars; ++i) {
+        character_t *ch = doc->characters[i];
+
+        if (ch == NULL) {
+            if (!ui_charsPanelShowNull) {
+                continue;
+            }
+
+            const char *ss = TextFormat("NULL 0x%04X", i);
+            GuiLabel((Rectangle) { x, y, 184, 16 }, ss);
+            y += 18;
+            continue;
+        }
+
+        const char *s;
+        
+        if (ch->type == CHARACTER_TYPE_SHAPE) {
+            if (!ui_charsPanelShowShape)
+                continue;
+            s = TextFormat("#12#shape 0x%04X", i);
+        } else if (ch->type == CHARACTER_TYPE_SPRITE) {
+            if (!ui_charsPanelShowSprite)
+                continue;
+            s = TextFormat("#13#sprite 0x%04X", i);
+        } else if (ch->type == CHARACTER_TYPE_DYNAMIC_TEXT) {
+            if (!ui_charsPanelShowDynText)
+                continue;
+            s = TextFormat("#10#dtext 0x%04X", i);
+        } else {
+            if (!ui_charsPanelShowUnk)
+                continue;
+            s = TextFormat("char 0x%04X", i);
+        }
+
+        if (i == ui_selectedCharacterId) {
             GuiSetState(STATE_FOCUSED);
         }
-        const char *s = TextFormat("0x%04X: 0x%04X", i, shape->character.id);
         if (GuiLabelButton((Rectangle) { x, y, 184, 16 }, s)) {
-            ui_selectedShapeId = i;
+            ui_selectedCharacterId = i;
         }
         GuiSetState(STATE_NORMAL);
         y += 18;
@@ -117,10 +191,9 @@ void drawShapesPanel(lumen_document_t *doc)
 void processKeyframe(lumen_document_t *doc, sprite_instance_t *inst, int keyframeIdx)
 {
     size_t numPlacements = stbds_arrlenu(inst->sprite->keyframes[keyframeIdx].placements);
-    uint16_t maxDepth = doc->properties.maxDepth;
 
-    stbds_arrsetlen(inst->displayList, maxDepth);
-    memset(inst->displayList, 0, maxDepth * sizeof(inst->displayList[0]));
+    stbds_arrsetlen(inst->displayList, inst->sprite->maxDepth);
+    memset(inst->displayList, 0, inst->sprite->maxDepth * sizeof(inst->displayList[0]));
 
     for (int i = 0; i < numPlacements; ++i) {
         placement_t *p = &inst->sprite->keyframes[keyframeIdx].placements[i];
@@ -133,8 +206,8 @@ void processKeyframe(lumen_document_t *doc, sprite_instance_t *inst, int keyfram
         entry.flags = p->flags;
         entry.blendMode = p->blendMode;
         entry.depth = p->depth;
-        entry.unk4 = p->unk4;
-        entry.unk5 = p->unk5;
+        entry.unk4 = p->clipDepth;
+        entry.unk5 = p->ratio;
         entry.unk6 = p->unk6;
         entry.positionFlags = p->positionFlags;
         entry.positionId = p->positionId;
@@ -156,8 +229,8 @@ void processKeyframe(lumen_document_t *doc, sprite_instance_t *inst, int keyfram
             spriteInst->character.id = ch->id;
             spriteInst->sprite = (sprite_t*)ch;
             
-            stbds_arrsetlen(spriteInst->displayList, maxDepth);
-            memset(spriteInst->displayList, 0, maxDepth * sizeof(spriteInst->displayList[0]));
+            stbds_arrsetlen(spriteInst->displayList, spriteInst->sprite->maxDepth);
+            memset(spriteInst->displayList, 0, spriteInst->sprite->maxDepth * sizeof(spriteInst->displayList[0]));
 
             // processKeyframe(doc, spriteInst, 0);
 
@@ -233,9 +306,9 @@ int main(int argc, char **argv)
 
     size_t numSprites = stbds_arrlenu(doc->sprites);
 
-    // TODO: load from file
-    int renderWidth = 1920;
-    int renderHeight = 1080;
+    int renderWidth = (int)doc->properties.width;
+    int renderHeight = (int)doc->properties.height;
+    SetTargetFPS((int)doc->properties.framerate);
 
     RenderTexture renderBuffer = LoadRenderTexture(renderWidth, renderHeight);
 
@@ -259,7 +332,7 @@ int main(int argc, char **argv)
 
     uint16_t maxDepth = doc->properties.maxDepth;
 
-    sprite_t *rootSprite = doc->sprites[numSprites-1];
+    sprite_t *rootSprite = (sprite_t*)doc->characters[doc->properties.rootCharacterId];
     sprite_instance_t rootSpriteInstance = {
         .sprite = rootSprite,
         .currentFrame = 0,
@@ -284,8 +357,8 @@ int main(int argc, char **argv)
         ClearBackground(BLACK);
         BeginMode3D(camera);
 
-        if (ui_drawShapesPanel && ui_selectedShapeId != -1) {
-            shape_t *selectedShape = doc->shapes[ui_selectedShapeId];
+        if (ui_selectedCharacterId != -1 && doc->characters[ui_selectedCharacterId] && doc->characters[ui_selectedCharacterId]->type == CHARACTER_TYPE_SHAPE) {
+            shape_t *selectedShape = (shape_t*)doc->characters[ui_selectedCharacterId];
             Matrix mtx = MatrixIdentity();
             mtx = MatrixMultiply(mtx, MatrixScale(0.01f, 0.01f, 0.01f));
 
@@ -373,56 +446,7 @@ int main(int argc, char **argv)
             EndScissorMode();
 
             drawTexlistPanel(texlist);
-            drawShapesPanel(doc);
-
-            ////// SPRITES PANEL
-            x = 10;
-            y = 10;
-            size_t numSprites = stbds_arrlenu(doc->sprites);
-            Rectangle spritesPanelView;
-            GuiScrollPanel(
-                (Rectangle) { x, y, 200, 300},
-                "Sprites",
-                (Rectangle) { x+8, y+8, 200-16, numSprites * 18 + 16},
-                &ui_spritesPanelScroll,
-                &spritesPanelView
-            );
-            BeginScissorMode(x, y + 24 + 8, 200, 300 - (24 + 8*2));
-
-            x += 8 + ui_spritesPanelScroll.x;
-            y += 24 + 8 + ui_spritesPanelScroll.y;
-            for (int i = 0; i < numSprites; ++i) {
-                sprite_t *sprite = doc->sprites[i];
-
-                // if (i == selectedSpriteId) {
-                //     GuiSetState(STATE_FOCUSED);
-                // }
-                const char *s = TextFormat("sprite 0x%04X", i);
-                if (GuiLabelButton((Rectangle) { x, y, 184, 16 }, s)) {
-                    // selectedSpriteId = i;
-                    // currentFrameId = 0;
-                    // selectedShapeId = -1;
-
-                    // {
-                    //     sprite_t *sprite = doc->sprites[selectedSpriteId];
-                    //     int frame = 0;
-                    //     size_t numPlacements = stbds_arrlenu(sprite->frames[frame].placements);
-
-                    //     // stbds_arrsetlen(sprite->displayList, maxDepth);
-                    //     // memset(sprite->displayList, 0, maxDepth * sizeof(sprite->displayList[0]));
-
-                    //     for (int i = 0; i < numPlacements; ++i) {
-                    //         placement_t *p = &sprite->frames[frame].placements[i];
-
-                    //         // sprite->displayList[p->depth] = p;
-                    //         // stbds_arrput(displayList, p);
-                    //     }
-                    // }
-                }
-                GuiSetState(STATE_NORMAL);
-                y += 18;
-            }
-            EndScissorMode();
+            drawCharactersPanel(doc);
 
             #define PANEL_PADDING (8)
             #define HEADER_HEIGHT (24)
@@ -530,7 +554,7 @@ int main(int argc, char **argv)
 
                         size_t numDeletions = stbds_arrlenu(frame->deletions);
                         for (int j = 0; j < numDeletions; ++j) {
-                            if (i == frame->deletions[j].spriteObjectId) {
+                            if (i == frame->deletions[j].depth) {
                                 GuiSetStyle(BUTTON, BASE_COLOR_NORMAL, 0x770000FF);
                                 if (GuiButton((Rectangle) { x, y + 18, size, 16 }, s)) {
                                     currentFrameId = frameIdx;
@@ -565,13 +589,8 @@ int main(int argc, char **argv)
             for (int i = 0; i < numAtlases; ++i) {
                 atlas_t *atlas = &doc->atlases[i];
 
-                const char *s = TextFormat("0x%04X: 0x%08X", i, atlas->unk);
-
-                if (GuiLabelButton((Rectangle) { x, y, 184, 16 }, s)) {
-                    y += 1;
-                    // selectedGraphicId = i;
-                }
-
+                const char *s = TextFormat("0x%04X: \"%s\"", i, doc->strings[atlas->nameId]);
+                GuiLabel((Rectangle) { x, y, 184, 16 }, s);
                 y += 18;
 
                 Rectangle src = { 0, 0, atlas->texture.width, atlas->texture.height };
@@ -581,31 +600,6 @@ int main(int argc, char **argv)
 
                 y += 64;
             }
-
-            ///// GRAPHICS PANEL
-            // x = 480;
-            // y = 10;
-            // GuiPanel((Rectangle) { x, y, 150, 300}, "Graphics");
-            // x += 8;
-            // y += 24 + 8;
-            // if (selectedShapeId != -1) {
-            //     shape_t *shape = &shapes[selectedShapeId];
-            //     size_t numGraphics = stbds_arrlenu(shape->graphics);
-
-            //     for (int i = 0; i < numGraphics; ++i) {
-            //         graphic_t *graphic = &shape->graphics[i];
-
-            //         if (i == selectedGraphicId) {
-            //             GuiSetState(STATE_FOCUSED);
-            //         }
-            //         const char *s = TextFormat("graphic 0x%04X", i);
-            //         if (GuiLabelButton((Rectangle) { x, y, 184, 16 }, s)) {
-            //             selectedGraphicId = i;
-            //         }
-            //         GuiSetState(STATE_NORMAL);
-            //         y += 18;
-            //     }
-            // }
         }
 
         EndDrawing();

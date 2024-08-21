@@ -16,9 +16,9 @@ typedef enum {
     CHUNK_TAG_ACTIONSCRIPT = 0xF005,
     CHUNK_TAG_ACTIONSCRIPT2 = 0xFF05,
     CHUNK_TAG_TEXTURE_ATLASES = 0xF007,
-    CHUNK_TAG_UNK_F008 = 0xF008,
+    CHUNK_TAG_SOUNDS = 0xF008,
     CHUNK_TAG_UNK_F009 = 0xF009,
-    CHUNK_TAG_UNK_F00A = 0xF00A,
+    CHUNK_TAG_STATIC_TEXT = 0xF00A,
     CHUNK_TAG_UNK_F00B = 0xF00B,
     CHUNK_TAG_PROPERTIES = 0xF00C,
     CHUNK_TAG_DEFINES = 0xF00D,
@@ -43,7 +43,6 @@ typedef enum {
     PLACE_FLAG_PLACE = 0x01,
     PLACE_FLAG_MOVE = 0x02
 } place_flag_t;
-
 
 // NOTE: prefixed to avoid collision with raylib
 typedef enum {
@@ -74,6 +73,13 @@ typedef enum {
     NONSMOOTHED_CLIPPED_BITMAP = 0x43
 } fill_type_t;
 
+// NOTE: prefixed to avoid collision with raylib
+typedef enum {
+    LM_TEXT_ALIGN_LEFT = 0,
+    LM_TEXT_ALIGN_RIGHT = 1,
+    LM_TEXT_ALIGN_CENTER = 2
+} text_align_t;
+
 #pragma pack(push, 1)
 typedef struct {
     int32_t magic;
@@ -100,7 +106,7 @@ typedef struct {
     uint32_t unk2;
     uint32_t maxCharacterId;
     int32_t unk4;
-    uint32_t maxCharacterId2;
+    uint32_t rootCharacterId;
     uint16_t maxDepth;
     uint16_t unk7;
     float framerate;
@@ -109,6 +115,17 @@ typedef struct {
     uint32_t unk8;
     uint32_t unk9;
 } properties_t;
+
+typedef struct {
+    uint32_t numShapes;
+    uint32_t unk1;
+    uint32_t numSprites;
+    uint32_t unk3;
+    uint32_t numTexts;
+    uint32_t unk5;
+    uint32_t unk6;
+    uint32_t unk7;
+} defines_t;
 
 typedef struct {
     float r;
@@ -126,7 +143,7 @@ typedef struct {
 
 typedef struct {
     int32_t id;
-    int32_t unk;
+    int32_t nameId;
     float width;
     float height;
 
@@ -147,6 +164,7 @@ typedef struct {
 typedef enum {
     CHARACTER_TYPE_SHAPE,
     CHARACTER_TYPE_SPRITE,
+    CHARACTER_TYPE_DYNAMIC_TEXT,
 
     // NOTE: this probably isn't necessary,
     // but will assist in debugging for the moment.
@@ -172,12 +190,13 @@ typedef struct {
     int32_t startFrame;
     int32_t unk1;
 
+    //
     int32_t id;
 } label_t;
 
 typedef struct {
     int32_t unk1;
-    int16_t spriteObjectId; // or was it placement id?
+    int16_t depth;
     int16_t unk2;
 } deletion_t;
 
@@ -203,8 +222,8 @@ typedef struct {
     int16_t blendMode;
 
     int16_t depth;
-    int16_t unk4;
-    int16_t unk5;
+    int16_t clipDepth;
+    int16_t ratio;
     int16_t unk6;
     int16_t positionFlags;
     int16_t positionId;
@@ -257,7 +276,8 @@ typedef struct {
     character_t character;
     int32_t unk1;
     int32_t unk2;
-    int32_t unk3;
+    int16_t maxDepth;
+    int16_t unk3;
 
     //
     label_t *labels;
@@ -274,8 +294,35 @@ typedef struct {
 } sprite_instance_t;
 
 typedef struct {
+    int32_t id;
+    int32_t nameId;
+} sound_t;
+
+typedef struct {
+    character_t character;
+
+    int32_t fontId;
+    int32_t placeholderTextId;
+    int32_t classNameId;
+    int32_t colorId;
+    int32_t boundsId;
+    int32_t varNameId;
+    int32_t unk5;
+    text_align_t alignment;
+    int16_t maxLength;
+    int32_t unk7;
+    int32_t unk8;
+    float fontSize;
+    float marginLeft;
+    float marginRight;
+    float indent;
+    float leading;
+} dynamic_text_t;
+
+typedef struct {
     header_t header;
     properties_t properties;
+    defines_t defines;
 
     char **strings;
     color_t *colors;
@@ -283,17 +330,17 @@ typedef struct {
     Vector2 *positions;
     bounds_t *bounds;
     atlas_t *atlases;
+    sound_t *sounds;
+
+    // FIXME: These are ultimately not needed,
+    // the character dictionary should suffice.
     shape_t **shapes;
+    dynamic_text_t **dynamicTexts;
     sprite_t **sprites;
 
     //
     character_t **characters;
 } lumen_document_t;
-
-typedef struct {
-    int16_t key;
-    placement_t value;
-} placement_kv_t;
 
 lumen_document_t* lumen_document_load(const char *filename);
 
