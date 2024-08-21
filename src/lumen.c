@@ -7,6 +7,13 @@
 
 Texture loadLmTexture(int idx)
 {
+    const char *pngFilename = TextFormat("data/chara/img-%05d.nut.png", idx);
+
+    if (FileExists(pngFilename)) {
+        Texture tex = LoadTexture(pngFilename);
+        return tex;
+    }
+
     const char *filename = TextFormat("data/chara/img-%05d.nut", idx);
 
     if (FileExists(filename)) {

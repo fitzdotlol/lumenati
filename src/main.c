@@ -17,12 +17,15 @@
 int g_screenWidth = 1280;
 int g_screenHeight = 720;
 
-Vector2 ui_shapesPanelScroll;
 Vector2 ui_spritesPanelScroll;
 Vector2 ui_spritePropertiesPanelScroll;
 Vector2 ui_displayListPanelScroll;
 bool ui_drawTexlistPanel = true;
 Vector2 ui_texlistPanelScroll;
+
+int ui_selectedShapeId = -1;
+bool ui_drawShapesPanel = true;
+Vector2 ui_shapesPanelScroll;
 
 void drawTexlistPanel(texlist_t *texlist)
 {
@@ -60,6 +63,52 @@ void drawTexlistPanel(texlist_t *texlist)
         const char *s = TextFormat("%d: %s", i, texlistEntry->name);
         GuiLabel((Rectangle) { x, y, 184, 16 }, s);
 
+        y += 18;
+    }
+    EndScissorMode();
+}
+
+void drawShapesPanel(lumen_document_t *doc)
+{
+    if (!ui_drawShapesPanel)
+        return;
+
+    int x = 230;
+    int y = 10;
+    size_t numShapes = stbds_arrlenu(doc->shapes);
+    Rectangle view;
+    GuiScrollPanel(
+        (Rectangle) { x, y, 200, 300},
+        "Shapes",
+        (Rectangle) { x+8, y+8, 200-16, numShapes * 18 + 16},
+        &ui_shapesPanelScroll,
+        &view
+    );
+
+    // close button
+    if (GuiButton(
+        (Rectangle) { x + 200 - 20, y + 4, 16, 16 },
+        "X"
+    )) {
+        ui_drawShapesPanel = false;
+        return;
+    }
+
+    BeginScissorMode(x, y + 24 + 8, 200, 300 - (24 + 8*2));
+
+    x += 8;
+    y += 24 + 8 + ui_shapesPanelScroll.y;
+    for (int i = 0; i < numShapes; ++i) {
+        shape_t *shape = doc->shapes[i];
+
+        if (i == ui_selectedShapeId) {
+            GuiSetState(STATE_FOCUSED);
+        }
+        const char *s = TextFormat("0x%04X: 0x%04X", i, shape->character.id);
+        if (GuiLabelButton((Rectangle) { x, y, 184, 16 }, s)) {
+            ui_selectedShapeId = i;
+        }
+        GuiSetState(STATE_NORMAL);
         y += 18;
     }
     EndScissorMode();
@@ -121,6 +170,20 @@ void processKeyframe(lumen_document_t *doc, sprite_instance_t *inst, int keyfram
     }
 }
 
+void drawShape(lumen_document_t *doc, shape_t *shape, Matrix mtx)
+{
+    size_t numGraphics = stbds_arrlenu(shape->graphics);
+
+    for (int i = 0; i < numGraphics; ++i) {
+        graphic_t *graphic = &shape->graphics[i];
+
+        rlDisableBackfaceCulling();
+
+        atlas_t *atlas = &doc->atlases[graphic->atlasId];
+        DrawMesh(graphic->mesh, atlas->mat, mtx);
+    }
+}
+
 void drawSpriteInstance(lumen_document_t *doc, sprite_instance_t *instance)
 {
     size_t numEntries = stbds_arrlenu(instance->displayList);
@@ -131,26 +194,16 @@ void drawSpriteInstance(lumen_document_t *doc, sprite_instance_t *instance)
         }
 
         if (entry->character->type == CHARACTER_TYPE_SHAPE) {
-            shape_t *shape = (shape_t*)entry->character;
-            size_t numGraphics = stbds_arrlenu(shape->graphics);
+            Matrix mtx = MatrixIdentity();
 
-            for (int i = 0; i < numGraphics; ++i) {
-                graphic_t *graphic = &shape->graphics[i];
+            // // 0 == use xform
+            // // ? == use position
+            // if (entry->positionFlags == 0) {
+            //     mtx = doc->transforms[entry->positionId];
+            //     mtx = MatrixMultiply(mtx, MatrixScale(0.01f, 0.01f, 0.01f));
+            // }
 
-                rlDisableBackfaceCulling();
-
-                Matrix mtx = MatrixIdentity();
-                
-                /// 0 == use xform
-                /// ? == use position
-                // if (entry->positionFlags == 0) {
-                //     mtx = doc->transforms[entry->positionId];
-                //     mtx = MatrixMultiply(mtx, MatrixScale(0.01f, 0.01f, 0.01f));
-                // }
-
-                atlas_t *atlas = &doc->atlases[graphic->atlasId];
-                DrawMesh(graphic->mesh, atlas->mat, mtx);
-            }
+            drawShape(doc, (shape_t*)entry->character, mtx);
         } else if (entry->character->type == CHARACTER_TYPE_SPRITE) {
             assert(false);
             // sprite_t *sprite = (sprite_t*)ch;
@@ -176,7 +229,6 @@ int main(int argc, char **argv)
     lumen_document_t *doc = lumen_document_load("data/chara/chara.lm");
     texlist_t *texlist = texlist_load("data/chara/texlist.lst");
 
-    int selectedShapeId = -1;
     int currentFrameId = 0;
 
     size_t numSprites = stbds_arrlenu(doc->sprites);
@@ -217,16 +269,6 @@ int main(int argc, char **argv)
     memset(rootSpriteInstance.displayList, 0, maxDepth * sizeof(rootSpriteInstance.displayList[0]));
 
     processKeyframe(doc, &rootSpriteInstance, 0);
-    // size_t numKeyframes = stbds_arrlenu(rootSprite->keyframes);
-    // printf("keyframes = %ld\n", numKeyframes);
-    // for (int keyframeIdx = 0; keyframeIdx < numKeyframes; ++keyframeIdx) {
-    //     frame_t *keyframe = &rootSprite->keyframes[keyframeIdx];
-    //     size_t numPlacements = stbds_arrlen(keyframe->placements);
-    //     printf("    key(id=%d)\n", keyframeIdx);
-    //     for (int j = 0; j < numPlacements; ++j) {
-    //         printf("    \"%s\"\n", doc->strings[keyframe->placements[j].nameId]);
-    //     }
-    // }
 
     while (!WindowShouldClose()) {
         if (IsWindowResized()) {
@@ -242,29 +284,16 @@ int main(int argc, char **argv)
         ClearBackground(BLACK);
         BeginMode3D(camera);
 
+        if (ui_selectedShapeId != -1) {
+            shape_t *selectedShape = doc->shapes[ui_selectedShapeId];
+            Matrix mtx = MatrixIdentity();
+            mtx = MatrixMultiply(mtx, MatrixScale(0.01f, 0.01f, 0.01f));
 
-        // if (selectedSpriteId != -1) {
-            // sprite_t *sprite = doc->sprites[selectedSpriteId];
+            drawShape(doc, selectedShape, mtx);
+        } else {
             drawSpriteInstance(doc, &rootSpriteInstance);
-        // }
+        }
         
-        // if (selectedShapeId != -1) {
-        //     shape_t *selectedShape = doc->shapes[selectedShapeId];
-        //     size_t numGraphics = stbds_arrlenu(selectedShape->graphics);
-
-        //     for (int i = 0; i < numGraphics; ++i) {
-        //         graphic_t *graphic = &selectedShape->graphics[i];
-
-        //         rlDisableBackfaceCulling();
-
-        //         mat.maps[MATERIAL_MAP_DIFFUSE].texture = doc->atlases[graphic->atlasId].texture;
-
-        //         Matrix mtx = MatrixIdentity();
-        //         mtx = MatrixMultiply(mtx, MatrixScale(0.01f, 0.01f, 0.01f));
-
-        //         DrawMesh(graphic->mesh, mat, mtx);
-        //     }
-        // }
         EndMode3D();
         EndTextureMode();
 
@@ -307,6 +336,12 @@ int main(int argc, char **argv)
                     shape_t *shape = (shape_t*)entry->character;
                     const char *s = TextFormat("shape(id=0x%04X)", entry->character->id);
                     GuiLabel((Rectangle) { x, y, 184, 16 }, s);
+                    y += 18;
+                    s = TextFormat("    0x%04X, 0x%04X, 0x%04X", shape->unk1, shape->boundsId, shape->unk2);
+                    GuiLabel((Rectangle) { x, y, 184, 16 }, s);
+                    y += 18;
+                    s = TextFormat("    %s", texlist->textures[shape->boundsId].name);
+                    GuiLabel((Rectangle) { x, y, 184, 16 }, s);
 
                     size_t numGraphics = stbds_arrlenu(shape->graphics);
                     for (int j = 0; j < numGraphics; ++j) {
@@ -338,39 +373,7 @@ int main(int argc, char **argv)
             EndScissorMode();
 
             drawTexlistPanel(texlist);
-
-            // //// SHAPES PANEL
-            // x = 230;
-            // y = 10;
-            // size_t numShapes = stbds_arrlenu(doc->shapes);
-            // Rectangle view;
-            // GuiScrollPanel(
-            //     (Rectangle) { x, y, 200, 300},
-            //     "Shapes",
-            //     (Rectangle) { x+8, y+8, 200-16, numShapes * 18 + 16},
-            //     &ui_shapesPanelScroll,
-            //     &view
-            // );
-            // BeginScissorMode(x, y + 24 + 8, 200, 300 - (24 + 8*2));
-
-            // x += 8;
-            // y += 24 + 8 + ui_shapesPanelScroll.y;
-            // for (int i = 0; i < numShapes; ++i) {
-            //     shape_t *shape = doc->shapes[i];
-
-            //     if (i == selectedShapeId) {
-            //         GuiSetState(STATE_FOCUSED);
-            //     }
-            //     const char *s = TextFormat("shape 0x%04X", i);
-            //     if (GuiLabelButton((Rectangle) { x, y, 184, 16 }, s)) {
-            //         selectedShapeId = i;
-            //         selectedSpriteId = -1;
-            //         currentFrameId = 0;
-            //     }
-            //     GuiSetState(STATE_NORMAL);
-            //     y += 18;
-            // }
-            // EndScissorMode();
+            drawShapesPanel(doc);
 
             ////// SPRITES PANEL
             x = 10;
