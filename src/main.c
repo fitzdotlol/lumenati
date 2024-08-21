@@ -33,6 +33,60 @@ Vector2 ui_displayListPanelScroll;
 bool ui_drawTexlistPanel = false;
 Vector2 ui_texlistPanelScroll;
 
+bool ui_drawAtlasPanel = true;
+Vector2 ui_atlasPanelScroll;
+
+sprite_t *g_rootSprite;
+sprite_instance_t g_rootSpriteInstance = { 0 };
+
+void drawDisplayListPanel(lumen_document_t *doc)
+{
+    int x = 230;
+    int y = 10;
+    sprite_instance_t *inst = &g_rootSpriteInstance;
+    if (ui_selectedSpriteInstance.sprite) {
+        inst = &ui_selectedSpriteInstance;
+    }
+    size_t numEntries = stbds_arrlenu(inst->displayList);
+    Rectangle displayListPanelView;
+    GuiScrollPanel(
+        (Rectangle) { x, y, 250, 300},
+        "Display List",
+        (Rectangle) { x+8, y+8, 250-16, numEntries * 18 + 16},
+        &ui_displayListPanelScroll,
+        &displayListPanelView
+    );
+    BeginScissorMode(x, y + 24 + 8, 250, 300 - (24 + 8*2));
+
+    x += 8 + ui_displayListPanelScroll.x;
+    y += 24 + 8 + ui_displayListPanelScroll.y;
+    for (int i = 0; i < numEntries; ++i) {
+        displaylist_entry_t *entry = &inst->displayList[i];
+        if (entry->character == NULL) {
+            continue;
+        }
+
+        const char *s;
+
+        if (entry->character->type == CHARACTER_TYPE_SHAPE) {
+            shape_t *shape = (shape_t*)entry->character;
+            s = TextFormat("#12#<Shape 0x%02X>", entry->character->id);
+        } else if (entry->character->type == CHARACTER_TYPE_SPRITE) {
+            assert(false);
+        } else if (entry->character->type == CHARACTER_TYPE_DYNAMIC_TEXT) {
+            s = TextFormat("#12#text(id=0x%04X)", entry->character->id);
+        } else if (entry->character->type == CHARACTER_TYPE_SPRITE_INSTANCE) {
+            sprite_instance_t *inst = (sprite_instance_t*)entry->character;
+            s = TextFormat("#13#%s (0x%04X)", doc->strings[entry->nameId], entry->character->id);
+        }
+
+        GuiLabel((Rectangle) { x, y, 184, 16 }, s);
+
+        y += 18;
+    }
+    EndScissorMode();
+}
+
 void drawTexlistPanel(texlist_t *texlist)
 {
     if (!ui_drawTexlistPanel)
@@ -85,10 +139,10 @@ void drawCharactersPanel(lumen_document_t *doc)
 
     int x = 10;
     int y = 10;
-    // FIXME: should just be visible (i.e., not filtered) characters.
-    size_t numChars = stbds_arrlenu(doc->characters);
 
+    size_t numChars = stbds_arrlenu(doc->characters);
     size_t numVisibleChars = 0;
+
     for (int i = 0; i < numChars; ++i) {
         character_t *ch = doc->characters[i];
         if (!ch) {
@@ -107,19 +161,20 @@ void drawCharactersPanel(lumen_document_t *doc)
         } else if (ch->type == CHARACTER_TYPE_DYNAMIC_TEXT) {
             if (!ui_charsPanelShowDynText)
                 continue;
-        } else {
-            if (!ui_charsPanelShowUnk)
-                continue;
+        } else if (!ui_charsPanelShowUnk) {
+            continue;
         }
 
         numVisibleChars++;
     }
 
     Rectangle charsPanelView;
+    Rectangle windowRect = (Rectangle) { x, y, 200, 300};
+    Rectangle contentRect = { x+8, y+8, 200-16, numVisibleChars * 18 + 16};
     GuiScrollPanel(
-        (Rectangle) { x, y, 200, 300},
+        windowRect,
         "Characters",
-        (Rectangle) { x+8, y+8, 200-16, numVisibleChars * 18 + 16},
+        contentRect,
         &ui_charsPanelScroll,
         &charsPanelView
     );
@@ -201,9 +256,6 @@ void drawCharactersPanel(lumen_document_t *doc)
 #define HEADER_HEIGHT (24)
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
-sprite_t *g_rootSprite;
-sprite_instance_t g_rootSpriteInstance = { 0 };
-
 void drawTimelinePanel(lumen_document_t *doc)
 {
     if (!g_rootSprite && !ui_selectedSpriteInstance.sprite)
@@ -235,9 +287,13 @@ void drawTimelinePanel(lumen_document_t *doc)
 
     Rectangle spritePropertiesPanelView;
 
+    size_t numKeyframes = stbds_arrlenu(sprite->keyframes);
+
+    s = TextFormat("Timeline - %d frames, %d keyframes", numFrames, numKeyframes);
+
     GuiScrollPanel(
         (Rectangle) { x, y, w, h},
-        "Timeline",
+        s,
         (Rectangle) { x+PANEL_PADDING, y+PANEL_PADDING, contentWidth, contentHeight },
         &ui_spritePropertiesPanelScroll,
         &spritePropertiesPanelView
@@ -339,6 +395,58 @@ void drawTimelinePanel(lumen_document_t *doc)
 
         y += 18;
         x = startX;
+    }
+
+    EndScissorMode();
+}
+
+void drawAtlasPanel(lumen_document_t *doc)
+{
+    if (!ui_drawAtlasPanel)
+        return;
+
+    int x = g_screenWidth - 150 - 8;
+    int y = 10;
+    int w = 150;
+    int h = 500;
+
+    size_t numAtlases = stbds_arrlenu(doc->atlases);
+    Rectangle view;
+    GuiScrollPanel(
+        (Rectangle) { x, y, w, h },
+        "Atlases",
+        (Rectangle) { x+PANEL_PADDING, y+PANEL_PADDING, w-(PANEL_PADDING*2), numAtlases * (18+64) + (PANEL_PADDING*2) },
+        &ui_atlasPanelScroll,
+        &view
+    );
+
+    // close button
+    if (GuiButton(
+        (Rectangle) { x + w - 20, y + 4, 16, 16 },
+        "X"
+    )) {
+        ui_drawAtlasPanel = false;
+        return;
+    }
+
+    BeginScissorMode(x, y + 24 + 8, w, h - (HEADER_HEIGHT + PANEL_PADDING*2));
+
+    x += 8 + ui_atlasPanelScroll.x;
+    y += 24 + 8 + ui_atlasPanelScroll.y;
+
+    for (int i = 0; i < numAtlases; ++i) {
+        atlas_t *atlas = &doc->atlases[i];
+
+        const char *s = TextFormat("0x%04X: \"%s\"", i, doc->strings[atlas->nameId]);
+        GuiLabel((Rectangle) { x, y, 184, 16 }, s);
+        y += 18;
+
+        Rectangle src = { 0, 0, atlas->texture.width, atlas->texture.height };
+        Rectangle dest = { x + 16, y, 64, 64 };
+
+        DrawTexturePro(atlas->texture, src, dest, Vector2Zero(), 0, WHITE);
+
+        y += 64;
     }
 
     EndScissorMode();
@@ -551,78 +659,11 @@ int main(int argc, char **argv)
         );
 
         if (drawUI) {
-            int x;
-            int y;
-
-            //// DISPLAY LIST PANEL
-            x = 230;
-            y = 10;
-            // sprite_t *sprite = doc->sprites[selectedSpriteId];
-            size_t numEntries = stbds_arrlenu(g_rootSpriteInstance.displayList);
-            Rectangle displayListPanelView;
-            GuiScrollPanel(
-                (Rectangle) { x, y, 250, 300},
-                "Display List",
-                (Rectangle) { x+8, y+8, 250-16, numEntries * 18 + 16},
-                &ui_displayListPanelScroll,
-                &displayListPanelView
-            );
-            BeginScissorMode(x, y + 24 + 8, 250, 300 - (24 + 8*2));
-
-            x += 8 + ui_displayListPanelScroll.x;
-            y += 24 + 8 + ui_displayListPanelScroll.y;
-            for (int i = 0; i < numEntries; ++i) {
-                displaylist_entry_t *entry = &g_rootSpriteInstance.displayList[i];
-                if (entry->character == NULL) {
-                    continue;
-                }
-
-                const char *s;
-
-                if (entry->character->type == CHARACTER_TYPE_SHAPE) {
-                    shape_t *shape = (shape_t*)entry->character;
-                    s = TextFormat("#12#<Shape 0x%02X>", entry->character->id);
-                } else if (entry->character->type == CHARACTER_TYPE_SPRITE) {
-                    assert(false);
-                } else if (entry->character->type == CHARACTER_TYPE_DYNAMIC_TEXT) {
-                    s = TextFormat("#12#text(id=0x%04X)", entry->character->id);
-                } else if (entry->character->type == CHARACTER_TYPE_SPRITE_INSTANCE) {
-                    sprite_instance_t *inst = (sprite_instance_t*)entry->character;
-                    s = TextFormat("#13#%s", doc->strings[entry->nameId]);
-                }
-
-                GuiLabel((Rectangle) { x, y, 184, 16 }, s);
-
-                y += 18;
-            }
-            EndScissorMode();
-
+            drawDisplayListPanel(doc);
             drawTexlistPanel(texlist);
             drawCharactersPanel(doc);
             drawTimelinePanel(doc);
-
-            /// ATLAS PANEL
-            x = g_screenWidth - 150 - 8;
-            y = 10;
-            GuiPanel((Rectangle) { x, y, 150, 300}, "Atlases");
-            x += 8;
-            y += 24 + 8;
-            size_t numAtlases = stbds_arrlenu(doc->atlases);
-
-            for (int i = 0; i < numAtlases; ++i) {
-                atlas_t *atlas = &doc->atlases[i];
-
-                const char *s = TextFormat("0x%04X: \"%s\"", i, doc->strings[atlas->nameId]);
-                GuiLabel((Rectangle) { x, y, 184, 16 }, s);
-                y += 18;
-
-                Rectangle src = { 0, 0, atlas->texture.width, atlas->texture.height };
-                Rectangle dest = { x + 16, y, 64, 64 };
-
-                DrawTexturePro(atlas->texture, src, dest, Vector2Zero(), 0, WHITE);
-
-                y += 64;
-            }
+            drawAtlasPanel(doc);
         }
 
         EndDrawing();
