@@ -276,8 +276,8 @@ typedef struct {
     character_t character;
     int32_t unk1;
     int32_t unk2;
-    int16_t maxDepth;
-    int16_t unk3;
+    uint16_t maxDepth;
+    uint16_t unk3;
 
     //
     label_t *labels;

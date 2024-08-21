@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <raylib.h>
+#include <raymath.h>
 #include "stb_ds.h"
 #include "lumen.h"
 #include "file.h"
@@ -140,11 +141,18 @@ lumen_document_t* lumen_document_load(const char *filename)
             printf("    %d transforms\n", numTransforms);
 
             for (int i = 0; i < numTransforms; ++i) {
+                float a = file_readFloat(&file);
+                float b = file_readFloat(&file);
+                float c = file_readFloat(&file);
+                float d = file_readFloat(&file);
+                float x = file_readFloat(&file);
+                float y = file_readFloat(&file);
+
                 Matrix xform = {
-                    file_readFloat(&file), file_readFloat(&file), 0.f, 0.f,
-                    file_readFloat(&file), file_readFloat(&file), 0.f, 0.f,
-                    file_readFloat(&file), file_readFloat(&file), 1.f, 0.f,
-                    0.f, 0.f, 0.f, 1.f
+                    a, c, 0, x,
+                    b, d, 0, y,
+                    0, 0, 1, 0,
+                    0, 0, 0, 1
                 };
 
                 stbds_arrput(doc->transforms, xform);
@@ -303,8 +311,8 @@ lumen_document_t* lumen_document_load(const char *filename)
             int numFrames = file_readInt32(&file);
             int numKeyframes = file_readInt32(&file);
 
-            sprite->maxDepth = file_readInt16(&file);
-            sprite->unk3 = file_readInt16(&file);
+            sprite->maxDepth = file_readUInt16(&file);
+            sprite->unk3 = file_readUInt16(&file);
 
             for (int i = 0; i < numLabels; i++)
             {
