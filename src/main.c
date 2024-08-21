@@ -284,7 +284,7 @@ int main(int argc, char **argv)
         ClearBackground(BLACK);
         BeginMode3D(camera);
 
-        if (ui_selectedShapeId != -1) {
+        if (ui_drawShapesPanel && ui_selectedShapeId != -1) {
             shape_t *selectedShape = doc->shapes[ui_selectedShapeId];
             Matrix mtx = MatrixIdentity();
             mtx = MatrixMultiply(mtx, MatrixScale(0.01f, 0.01f, 0.01f));
